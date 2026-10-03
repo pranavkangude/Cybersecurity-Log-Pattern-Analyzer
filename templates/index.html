@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log Pattern Analyzer</title>
+<style>
+:root{--bg:#eef1f4;--fg:#14202b;--mut:#5b6a78;--card:#fff;--line:#cfd6dd;--critical:#b3261e;--high:#c2570c;--medium:#8a6a00;--low:#2b6cb0}
+@media(prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e4e9ee;--mut:#94a3b1;--card:#18212a;--line:#2c3947;--critical:#ff8a80;--high:#ffab6b;--medium:#e6c25a;--low:#7db4ee}}
+*{box-sizing:border-box}
+body{margin:0;padding:24px;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif}
+main{max-width:980px;margin:auto}
+h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.05rem;margin:28px 0 8px}
+p.sub{margin:0 0 20px;color:var(--mut)}
+section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
+textarea{width:100%;height:150px;font:13px/1.4 ui-monospace,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:8px}
+button,select{font:inherit;padding:6px 12px;border:1px solid var(--fg);background:var(--card);color:var(--fg);border-radius:4px;cursor:pointer}
+button.go{background:var(--fg);color:var(--bg)}
+button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--low);outline-offset:2px}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tape{display:flex;flex-wrap:wrap;gap:4px}
+.tok{font:12px ui-monospace,monospace;padding:3px 7px;border:1px solid var(--line);border-radius:3px}
+.tok.critical,.tok.high,.tok.medium,.tok.low{border-width:2px}
+.critical{border-color:var(--critical)!important}.high{border-color:var(--high)!important}.medium{border-color:var(--medium)!important}.low{border-color:var(--low)!important}
+.alert{border-left:5px solid;padding:6px 12px;margin:8px 0;background:var(--bg)}
+.alert.critical{color:inherit}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+pre{background:var(--bg);padding:10px;border-radius:4px;overflow-x:auto;font-size:12.5px}
+.wide{overflow-x:auto}
+</style></head>
+<body><main>
+<h1>Cybersecurity Log Pattern Analyzer</h1>
+<p class="sub">Each rule is a regular expression, compiled by our own code into an NFA, a DFA, and a minimized DFA that scans the log.</p>
+
+<section>
+  <label for="log"><b>Log</b> (one event per line, or <code>time, source, EVENT</code>)</label>
+  <textarea id="log" spellcheck="false"></textarea>
+  <div class="row">
+    <button class="go" onclick="analyze()">Analyze log</button>
+    <select id="sample" aria-label="Load a sample log" onchange="loadSample()"><option value="">Load sample…</option></select>
+    <input type="file" id="file" accept=".log,.txt,.csv" aria-label="Upload a log file" onchange="upload()">
+  </div>
+</section>
+
+<h2>Event tape</h2>
+<section><div id="tokens" class="tape"><em>Analyze a log to see its events.</em></div></section>
+<h2>Alerts</h2>
+<section id="alerts"><em>No results yet.</em></section>
+
+<h2>Rules and automata</h2>
+<section class="wide">
+  <table><thead><tr><th>ID</th><th>Pattern</th><th>Name</th><th>Severity</th><th>States: NFA, DFA, minimized</th><th>Show</th></tr></thead><tbody id="rules"></tbody></table>
+  <div id="diagram" class="wide"></div>
+  <pre id="table" hidden></pre>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const j=async(u,o)=>(await fetch(u,o)).json();
+let samples={};
+async function analyze(){
+  const r=await j('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({log:$('log').value})});
+  const sev=t=>{const a=r.alerts.find(a=>a.source===t.source&&t.line>=a.start&&t.line<=a.end);return a?a.severity.toLowerCase():''};
+  $('tokens').innerHTML=r.tokens.map(t=>`<span class="tok ${sev(t)}" title="line ${t.line}, source ${esc(t.source)}">${t.token}</span>`).join('')||'<em>The log is empty.</em>';
+  $('alerts').innerHTML=r.alerts.length?r.alerts.map(a=>`<div class="alert ${a.severity.toLowerCase()}"><b>Pattern Detected: ${esc(a.rule)}</b><br>Severity: ${a.severity}. Events in match: ${a.events}. Lines ${a.lines}. Source: ${esc(a.source)}.</div>`).join(''):'<p>No suspicious patterns found.</p>';
+}
+function upload(){const f=$('file').files[0];if(f)f.text().then(t=>{$('log').value=t;analyze()})}
+async function draw(id,kind){$('diagram').innerHTML='<p><b>Rule '+id+' — '+{nfa:'NFA (ε = free move)',dfa:'DFA',min:'Minimized DFA'}[kind]+'</b> (dead state omitted)</p>'+await (await fetch(`/diagram/${id}/${kind}`)).text()}
+function loadSample(){$('log').value=samples[$('sample').value]||'';if($('sample').value)analyze()}
+async function show(id){
+  const a=await j('/automata/'+id);
+  $('table').hidden=false;
+  $('table').textContent='Minimized DFA for: '+a.pattern+'\n(moves into the dead state are omitted)\n\n'+a.table.map(s=>
+    `q${s.state}${s.start?' [start]':''}${s.accepting?' [accepting]':''}\n`+Object.entries(s.moves).map(([k,v])=>`   ${k} -> q${v}`).join('\n')).join('\n');
+}
+(async()=>{
+  samples=await j('/samples');
+  $('sample').innerHTML+=Object.keys(samples).map(k=>`<option>${k}</option>`).join('');
+  const rs=await j('/rules');
+  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code></td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button></td></tr>`).join('');
+})();
+</script></body></html>
