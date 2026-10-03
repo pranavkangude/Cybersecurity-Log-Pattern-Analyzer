@@ -80,3 +80,18 @@ def test_add_and_remove_rule_at_runtime():
     assert "Scan Then Intrusion" in {a["rule"] for a in res["alerts"]}
     assert c.delete("/rules/1").status_code == 400            # built-in rules are protected
     assert c.delete(f"/rules/{rid}").status_code == 200
+
+def test_time_window_fast_vs_slow():
+    rules = compile_rules()
+    res = analyze(open(os.path.join(os.path.dirname(__file__), "..", "sample_logs", "fast_vs_slow.log")).read(), rules)
+    fast = {(a["rule"], a["source"]) for a in res["alerts"]}
+    assert ("Fast Login Failures", "10.0.0.5") in fast        # 5 failures in 20 s
+    assert ("Fast Login Failures", "10.0.0.6") not in fast    # 5 failures over 6 minutes
+    assert ("Repeated Login Failures", "10.0.0.6") in fast    # the plain rule still fires
+
+def test_time_window_skips_old_events():
+    rules = compile_rules()
+    log = "\n".join(f"2026-09-30 10:{m}, h, LOGIN_FAILED" for m in
+                    ("00:00", "01:40", "01:41", "01:42", "01:43", "01:44"))
+    hits = [a for a in analyze(log, rules)["alerts"] if a["rule"] == "Fast Login Failures"]
+    assert [(a["start"], a["end"]) for a in hits] == [(2, 6)]  # the old first failure is left out

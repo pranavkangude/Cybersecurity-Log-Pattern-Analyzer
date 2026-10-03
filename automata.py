@@ -134,11 +134,13 @@ def minimize(d):
     return DFA(new[d.start], delta, {new[s] for s in d.accepting}, len(ids))
 
 # ---------- 5. Matcher: leftmost-longest, non-overlapping ----------
-def find_matches(d, toks):
+def find_matches(d, toks, times=None, window=None):
     dead, out, i = d.dead_states(), [], 0
     while i < len(toks):
         s, last = d.start, None
         for j in range(i, len(toks)):
+            if window is not None and times and None not in (times[i], times[j]) and times[j] - times[i] > window:
+                break                            # match may not stretch beyond the time window
             s = d.delta[(s, toks[j])]
             if s in dead: break
             if s in d.accepting: last = j

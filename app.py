@@ -17,7 +17,7 @@ def analyze_route():
 @app.get("/rules")
 def rules():
     return jsonify([{**{k: r[k] for k in ("id", "pattern", "name", "severity")},
-                     "custom": r.get("custom", False), "nfa_states": r["nfa"].n, "dfa_states": r["dfa"].n, "min_states": r["mdfa"].n}
+                     "custom": r.get("custom", False), "window": r.get("window"), "nfa_states": r["nfa"].n, "dfa_states": r["dfa"].n, "min_states": r["mdfa"].n}
                     for r in RULES])
 
 @app.post("/rules")
@@ -26,10 +26,15 @@ def add_rule():
     pattern, name, sev = (d.get("pattern") or "").strip(), (d.get("name") or "").strip(), d.get("severity", "MEDIUM")
     if not pattern or not name: return jsonify(error="Enter both a pattern and a name."), 400
     if sev not in SEV: return jsonify(error="Severity must be CRITICAL, HIGH, MEDIUM or LOW."), 400
+    win = d.get("window")
+    if win in (None, ""): win = None
+    else:
+        try: win = int(win); assert win > 0
+        except (ValueError, TypeError, AssertionError): return jsonify(error="Window must be a whole number of seconds above 0."), 400
     try: nfa, dfa, mdfa = compile_pattern(pattern)
     except ValueError as e: return jsonify(error=str(e)), 400
     rule = {"id": max(r["id"] for r in RULES) + 1, "pattern": pattern, "name": name, "severity": sev,
-            "custom": True, "nfa": nfa, "dfa": dfa, "mdfa": mdfa}
+            "custom": True, "window": win, "nfa": nfa, "dfa": dfa, "mdfa": mdfa}
     RULES.append(rule)       # kept in memory only; restart resets to rules.json
     return jsonify(id=rule["id"]), 201
 

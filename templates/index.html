@@ -51,6 +51,7 @@ pre{background:var(--bg);padding:10px;border-radius:4px;overflow-x:auto;font-siz
   <div class="row">
     <input id="pat" placeholder="PORT_SCAN{2,} UNAUTHORIZED_ACCESS" aria-label="Rule pattern" size="38">
     <input id="rname" placeholder="Rule name" aria-label="Rule name">
+    <input id="rwin" type="number" min="1" placeholder="Within seconds (optional)" aria-label="Time window in seconds" style="width:13em">
     <select id="rsev" aria-label="Severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option></select>
     <button class="go" onclick="addRule()">Add rule</button>
   </div>
@@ -69,7 +70,7 @@ async function analyze(){
   const r=await j('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({log:$('log').value})});
   const sev=t=>{const a=r.alerts.find(a=>a.source===t.source&&t.line>=a.start&&t.line<=a.end);return a?a.severity.toLowerCase():''};
   $('tokens').innerHTML=r.tokens.map(t=>`<span class="tok ${sev(t)}" title="line ${t.line}, source ${esc(t.source)}">${t.token}</span>`).join('')||'<em>The log is empty.</em>';
-  $('alerts').innerHTML=r.alerts.length?r.alerts.map(a=>`<div class="alert ${a.severity.toLowerCase()}"><b>Pattern Detected: ${esc(a.rule)}</b><br>Severity: ${a.severity}. Events in match: ${a.events}. Lines ${a.lines}. Source: ${esc(a.source)}.</div>`).join(''):'<p>No suspicious patterns found.</p>';
+  $('alerts').innerHTML=r.alerts.length?r.alerts.map(a=>`<div class="alert ${a.severity.toLowerCase()}"><b>Pattern Detected: ${esc(a.rule)}</b><br>Severity: ${a.severity}. Events in match: ${a.events}.${a.window?` Within ${a.window} s.`:''} Lines ${a.lines}. Source: ${esc(a.source)}.</div>`).join(''):'<p>No suspicious patterns found.</p>';
 }
 function upload(){const f=$('file').files[0];if(f)f.text().then(t=>{$('log').value=t;analyze()})}
 async function draw(id,kind){$('diagram').innerHTML='<p><b>Rule '+id+' — '+{nfa:'NFA (ε = free move)',dfa:'DFA',min:'Minimized DFA'}[kind]+'</b> (dead state omitted)</p>'+await (await fetch(`/diagram/${id}/${kind}`)).text()}
@@ -82,14 +83,14 @@ async function show(id){
 }
 async function loadRules(){
   const rs=await j('/rules');
-  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code></td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button>${r.custom?` <button onclick="removeRule(${r.id})">Remove</button>`:''}</td></tr>`).join('');
+  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code>${r.window?` <small>within ${r.window} s</small>`:''}</td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button>${r.custom?` <button onclick="removeRule(${r.id})">Remove</button>`:''}</td></tr>`).join('');
 }
 async function addRule(){
   $('msg').textContent='';
-  const res=await fetch('/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:$('pat').value,name:$('rname').value,severity:$('rsev').value})});
+  const res=await fetch('/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:$('pat').value,name:$('rname').value,severity:$('rsev').value,window:$('rwin').value})});
   const d=await res.json();
   if(!res.ok){$('msg').textContent=d.error;return}
-  $('pat').value='';$('rname').value='';
+  $('pat').value='';$('rname').value='';$('rwin').value='';
   await loadRules();draw(d.id,'min');
   if($('log').value.trim())analyze();
 }

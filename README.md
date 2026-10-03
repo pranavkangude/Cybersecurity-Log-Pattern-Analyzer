@@ -23,4 +23,5 @@ python -m pytest       # tests, including a cross-check against Python's re modu
 - Overlapping rules (1 and 2) both fire; Rule 2 is CRITICAL.
 - Diagrams are drawn by `diagram.py` as SVG (no Graphviz needed). Rule 10 shows union and grouping.
 - Rules can be added from the web page. They are validated, compiled live, and kept in memory only (a restart resets to `rules.json`).
-- Not yet built: time windows, SQLite, live log tailing.
+- A rule may have an optional `window` (seconds): a match may not span more than that between its first and last event. Needs `time, source, EVENT` lines with timestamps like `2026-09-30 10:00:05`. Rule 11 is an example.
+- Not yet built: SQLite, live log tailing.

@@ -1,12 +1,69 @@
 [
-  {"id": 1, "pattern": "LOGIN_FAILED{3,}", "name": "Repeated Login Failures", "severity": "HIGH"},
-  {"id": 2, "pattern": "LOGIN_FAILED{3,} LOGIN_SUCCESS", "name": "Possible Brute Force", "severity": "CRITICAL"},
-  {"id": 3, "pattern": "PORT_SCAN{3,}", "name": "Possible Port Scanning", "severity": "MEDIUM"},
-  {"id": 4, "pattern": "UNAUTHORIZED_ACCESS", "name": "Unauthorized Access", "severity": "HIGH"},
-  {"id": 5, "pattern": "SSH_FAIL{3,}", "name": "SSH Brute Force", "severity": "HIGH"},
-  {"id": 6, "pattern": "LOGIN_FAILED{5,} ACCOUNT_LOCKED", "name": "Account Attack", "severity": "CRITICAL"},
-  {"id": 7, "pattern": "SUSPICIOUS_CMD", "name": "Suspicious Command", "severity": "MEDIUM"},
-  {"id": 8, "pattern": "MALWARE_DETECTED", "name": "Malware Activity", "severity": "CRITICAL"},
-  {"id": 9, "pattern": "SUSPICIOUS_CMD MALWARE_DETECTED", "name": "Command Then Malware", "severity": "CRITICAL"},
-  {"id": 10, "pattern": "PORT_SCAN{3,} (LOGIN_FAILED|SSH_FAIL){3,}", "name": "Scan Then Brute Force", "severity": "CRITICAL"}
+ {
+  "id": 1,
+  "pattern": "LOGIN_FAILED{3,}",
+  "name": "Repeated Login Failures",
+  "severity": "HIGH"
+ },
+ {
+  "id": 2,
+  "pattern": "LOGIN_FAILED{3,} LOGIN_SUCCESS",
+  "name": "Possible Brute Force",
+  "severity": "CRITICAL"
+ },
+ {
+  "id": 3,
+  "pattern": "PORT_SCAN{3,}",
+  "name": "Possible Port Scanning",
+  "severity": "MEDIUM"
+ },
+ {
+  "id": 4,
+  "pattern": "UNAUTHORIZED_ACCESS",
+  "name": "Unauthorized Access",
+  "severity": "HIGH"
+ },
+ {
+  "id": 5,
+  "pattern": "SSH_FAIL{3,}",
+  "name": "SSH Brute Force",
+  "severity": "HIGH"
+ },
+ {
+  "id": 6,
+  "pattern": "LOGIN_FAILED{5,} ACCOUNT_LOCKED",
+  "name": "Account Attack",
+  "severity": "CRITICAL"
+ },
+ {
+  "id": 7,
+  "pattern": "SUSPICIOUS_CMD",
+  "name": "Suspicious Command",
+  "severity": "MEDIUM"
+ },
+ {
+  "id": 8,
+  "pattern": "MALWARE_DETECTED",
+  "name": "Malware Activity",
+  "severity": "CRITICAL"
+ },
+ {
+  "id": 9,
+  "pattern": "SUSPICIOUS_CMD MALWARE_DETECTED",
+  "name": "Command Then Malware",
+  "severity": "CRITICAL"
+ },
+ {
+  "id": 10,
+  "pattern": "PORT_SCAN{3,} (LOGIN_FAILED|SSH_FAIL){3,}",
+  "name": "Scan Then Brute Force",
+  "severity": "CRITICAL"
+ },
+ {
+  "id": 11,
+  "pattern": "LOGIN_FAILED{5,}",
+  "name": "Fast Login Failures",
+  "severity": "CRITICAL",
+  "window": 60
+ }
 ]
