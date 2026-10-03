@@ -1,6 +1,7 @@
 import os
 from flask import Flask, Response, jsonify, render_template, request
-from engine import compile_rules, analyze, HERE
+from automata import compile_pattern
+from engine import compile_rules, analyze, HERE, SEV
 from diagram import nfa_svg, dfa_svg
 
 app = Flask(__name__)
@@ -16,8 +17,28 @@ def analyze_route():
 @app.get("/rules")
 def rules():
     return jsonify([{**{k: r[k] for k in ("id", "pattern", "name", "severity")},
-                     "nfa_states": r["nfa"].n, "dfa_states": r["dfa"].n, "min_states": r["mdfa"].n}
+                     "custom": r.get("custom", False), "nfa_states": r["nfa"].n, "dfa_states": r["dfa"].n, "min_states": r["mdfa"].n}
                     for r in RULES])
+
+@app.post("/rules")
+def add_rule():
+    d = request.get_json(silent=True) or {}
+    pattern, name, sev = (d.get("pattern") or "").strip(), (d.get("name") or "").strip(), d.get("severity", "MEDIUM")
+    if not pattern or not name: return jsonify(error="Enter both a pattern and a name."), 400
+    if sev not in SEV: return jsonify(error="Severity must be CRITICAL, HIGH, MEDIUM or LOW."), 400
+    try: nfa, dfa, mdfa = compile_pattern(pattern)
+    except ValueError as e: return jsonify(error=str(e)), 400
+    rule = {"id": max(r["id"] for r in RULES) + 1, "pattern": pattern, "name": name, "severity": sev,
+            "custom": True, "nfa": nfa, "dfa": dfa, "mdfa": mdfa}
+    RULES.append(rule)       # kept in memory only; restart resets to rules.json
+    return jsonify(id=rule["id"]), 201
+
+@app.delete("/rules/<int:rid>")
+def remove_rule(rid):
+    r = next((r for r in RULES if r["id"] == rid), None)
+    if not r or not r.get("custom"): return jsonify(error="Only rules you added can be removed."), 400
+    RULES.remove(r)
+    return jsonify(ok=True)
 
 @app.get("/automata/<int:rid>")
 def automata(rid):

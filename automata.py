@@ -8,6 +8,8 @@ EPS = None
 
 # ---------- 1. Regex parser (recursive descent) -> AST ----------
 def parse(pattern):
+    leftover = re.sub(r"[A-Z_]+|\{\d+,\}|[|()*+]|\s+", "", pattern)
+    if leftover: raise ValueError(f"unsupported characters {leftover!r} (use {{n,}} for repeats and UPPERCASE token names)")
     toks = re.findall(r"[A-Z_]+|\{\d+,\}|[|()*+]", pattern)
     pos = 0
     def peek(): return toks[pos] if pos < len(toks) else None

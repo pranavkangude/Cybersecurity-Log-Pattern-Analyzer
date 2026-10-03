@@ -12,9 +12,9 @@ h1{font-size:1.5rem;margin:0 0 4px}h2{font-size:1.05rem;margin:28px 0 8px}
 p.sub{margin:0 0 20px;color:var(--mut)}
 section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
 textarea{width:100%;height:150px;font:13px/1.4 ui-monospace,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:8px}
-button,select{font:inherit;padding:6px 12px;border:1px solid var(--fg);background:var(--card);color:var(--fg);border-radius:4px;cursor:pointer}
-button.go{background:var(--fg);color:var(--bg)}
-button:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--low);outline-offset:2px}
+button,select,input{font:inherit;padding:6px 12px;border:1px solid var(--fg);background:var(--card);color:var(--fg);border-radius:4px;cursor:pointer}
+input{cursor:text}button.go{background:var(--fg);color:var(--bg)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--low);outline-offset:2px}
 .row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .tape{display:flex;flex-wrap:wrap;gap:4px}
 .tok{font:12px ui-monospace,monospace;padding:3px 7px;border:1px solid var(--line);border-radius:3px}
@@ -47,6 +47,14 @@ pre{background:var(--bg);padding:10px;border-radius:4px;overflow-x:auto;font-siz
 
 <h2>Rules and automata</h2>
 <section class="wide">
+  <p><b>Add a rule.</b> Tokens: LOGIN_SUCCESS, LOGIN_FAILED, PORT_SCAN, UNAUTHORIZED_ACCESS, SSH_FAIL, ACCOUNT_LOCKED, SUSPICIOUS_CMD, MALWARE_DETECTED, OTHER. Operators: space (then), <code>|</code> (or), <code>*</code>, <code>+</code>, <code>{n,}</code>, <code>( )</code>.</p>
+  <div class="row">
+    <input id="pat" placeholder="PORT_SCAN{2,} UNAUTHORIZED_ACCESS" aria-label="Rule pattern" size="38">
+    <input id="rname" placeholder="Rule name" aria-label="Rule name">
+    <select id="rsev" aria-label="Severity"><option>CRITICAL</option><option>HIGH</option><option selected>MEDIUM</option><option>LOW</option></select>
+    <button class="go" onclick="addRule()">Add rule</button>
+  </div>
+  <p id="msg" role="alert" style="color:var(--critical)"></p>
   <table><thead><tr><th>ID</th><th>Pattern</th><th>Name</th><th>Severity</th><th>States: NFA, DFA, minimized</th><th>Show</th></tr></thead><tbody id="rules"></tbody></table>
   <div id="diagram" class="wide"></div>
   <pre id="table" hidden></pre>
@@ -72,10 +80,23 @@ async function show(id){
   $('table').textContent='Minimized DFA for: '+a.pattern+'\n(moves into the dead state are omitted)\n\n'+a.table.map(s=>
     `q${s.state}${s.start?' [start]':''}${s.accepting?' [accepting]':''}\n`+Object.entries(s.moves).map(([k,v])=>`   ${k} -> q${v}`).join('\n')).join('\n');
 }
+async function loadRules(){
+  const rs=await j('/rules');
+  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code></td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button>${r.custom?` <button onclick="removeRule(${r.id})">Remove</button>`:''}</td></tr>`).join('');
+}
+async function addRule(){
+  $('msg').textContent='';
+  const res=await fetch('/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:$('pat').value,name:$('rname').value,severity:$('rsev').value})});
+  const d=await res.json();
+  if(!res.ok){$('msg').textContent=d.error;return}
+  $('pat').value='';$('rname').value='';
+  await loadRules();draw(d.id,'min');
+  if($('log').value.trim())analyze();
+}
+async function removeRule(id){await fetch('/rules/'+id,{method:'DELETE'});$('diagram').innerHTML='';await loadRules();if($('log').value.trim())analyze()}
 (async()=>{
   samples=await j('/samples');
   $('sample').innerHTML+=Object.keys(samples).map(k=>`<option>${k}</option>`).join('');
-  const rs=await j('/rules');
-  $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code></td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button></td></tr>`).join('');
+  loadRules();
 })();
 </script></body></html>

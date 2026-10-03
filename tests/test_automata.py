@@ -62,3 +62,21 @@ def test_diagrams_render():
     for kind in ("nfa", "dfa", "min"):
         r = c.get(f"/diagram/10/{kind}")
         assert r.status_code == 200 and b"<svg" in r.data
+
+def test_parser_rejects_bad_syntax():
+    import pytest
+    for bad in ("LOGIN_FAILED{3}", "login_failed", "FOO", "(LOGIN_FAILED", "LOGIN_FAILED $"):
+        with pytest.raises(ValueError): compile_pattern(bad)
+
+def test_add_and_remove_rule_at_runtime():
+    from app import app
+    c = app.test_client()
+    bad = c.post("/rules", json={"pattern": "LOGIN_FAILED{3}", "name": "x", "severity": "HIGH"})
+    assert bad.status_code == 400 and "error" in bad.get_json()
+    ok = c.post("/rules", json={"pattern": "PORT_SCAN{2,} UNAUTHORIZED_ACCESS", "name": "Scan Then Intrusion", "severity": "HIGH"})
+    assert ok.status_code == 201
+    rid = ok.get_json()["id"]
+    res = c.post("/analyze", json={"log": "PORT_SCAN\nPORT_SCAN\nUNAUTHORIZED_ACCESS"}).get_json()
+    assert "Scan Then Intrusion" in {a["rule"] for a in res["alerts"]}
+    assert c.delete("/rules/1").status_code == 400            # built-in rules are protected
+    assert c.delete(f"/rules/{rid}").status_code == 200
