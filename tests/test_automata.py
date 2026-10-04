@@ -1,5 +1,7 @@
 import json, random, re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import tempfile
+os.environ["LOG_ANALYZER_DB"] = os.path.join(tempfile.mkdtemp(), "test_history.db")   # tests never touch the real history
 from automata import ALPHABET, compile_pattern, nfa_accepts
 from engine import compile_rules, analyze
 
@@ -95,3 +97,19 @@ def test_time_window_skips_old_events():
                     ("00:00", "01:40", "01:41", "01:42", "01:43", "01:44"))
     hits = [a for a in analyze(log, rules)["alerts"] if a["rule"] == "Fast Login Failures"]
     assert [(a["start"], a["end"]) for a in hits] == [(2, 6)]  # the old first failure is left out
+
+def test_history_saved_listed_and_cleared():
+    from app import app
+    c = app.test_client()
+    c.delete("/history")
+    log = "LOGIN_FAILED\n" * 3
+    r = c.post("/analyze", json={"log": log, "save": True}).get_json()
+    assert "run_id" in r
+    assert "run_id" not in c.post("/analyze", json={"log": log}).get_json()      # not saved unless asked
+    assert "run_id" not in c.post("/analyze", json={"log": "", "save": True}).get_json()   # empty log is not saved
+    h = c.get("/history").get_json()
+    assert len(h["runs"]) == 1 and h["runs"][0]["alert_count"] == len(r["alerts"])
+    assert "Repeated Login Failures" in {a["rule"] for a in c.get(f"/history/{r['run_id']}").get_json()}
+    assert h["top_rules"][0]["n"] >= 1
+    c.delete("/history")
+    assert c.get("/history").get_json()["runs"] == []

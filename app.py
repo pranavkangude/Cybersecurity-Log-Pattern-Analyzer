@@ -3,6 +3,7 @@ from flask import Flask, Response, jsonify, render_template, request
 from automata import compile_pattern
 from engine import compile_rules, analyze, HERE, SEV
 from diagram import nfa_svg, dfa_svg
+import history
 
 app = Flask(__name__)
 RULES = compile_rules()   # compiled once at startup
@@ -12,7 +13,23 @@ def index(): return render_template("index.html")
 
 @app.post("/analyze")
 def analyze_route():
-    return jsonify(analyze((request.get_json(silent=True) or {}).get("log", ""), RULES))
+    body = request.get_json(silent=True) or {}
+    res = analyze(body.get("log", ""), RULES)
+    if body.get("save") and res["tokens"]:            # the page asks to save; plain API calls do not
+        res["run_id"] = history.save_run(res)
+    return jsonify(res)
+
+@app.get("/history")
+def history_list():
+    return jsonify(runs=history.list_runs(), top_rules=history.top_rules())
+
+@app.get("/history/<int:rid>")
+def history_run(rid): return jsonify(history.run_alerts(rid))
+
+@app.delete("/history")
+def history_clear():
+    history.clear()
+    return jsonify(ok=True)
 
 @app.get("/rules")
 def rules():

@@ -45,6 +45,14 @@ pre{background:var(--bg);padding:10px;border-radius:4px;overflow-x:auto;font-siz
 <h2>Alerts</h2>
 <section id="alerts"><em>No results yet.</em></section>
 
+<h2>History</h2>
+<section class="wide">
+  <p id="top"></p>
+  <table><thead><tr><th>Run</th><th>When</th><th>Events</th><th>Alerts</th><th></th></tr></thead><tbody id="runs"></tbody></table>
+  <div id="runalerts"></div>
+  <div class="row"><button onclick="clearHistory()">Clear history</button></div>
+</section>
+
 <h2>Rules and automata</h2>
 <section class="wide">
   <p><b>Add a rule.</b> Tokens: LOGIN_SUCCESS, LOGIN_FAILED, PORT_SCAN, UNAUTHORIZED_ACCESS, SSH_FAIL, ACCOUNT_LOCKED, SUSPICIOUS_CMD, MALWARE_DETECTED, OTHER. Operators: space (then), <code>|</code> (or), <code>*</code>, <code>+</code>, <code>{n,}</code>, <code>( )</code>.</p>
@@ -66,11 +74,12 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const j=async(u,o)=>(await fetch(u,o)).json();
 let samples={};
-async function analyze(){
-  const r=await j('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({log:$('log').value})});
+async function analyze(save=true){
+  const r=await j('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({log:$('log').value,save})});
   const sev=t=>{const a=r.alerts.find(a=>a.source===t.source&&t.line>=a.start&&t.line<=a.end);return a?a.severity.toLowerCase():''};
   $('tokens').innerHTML=r.tokens.map(t=>`<span class="tok ${sev(t)}" title="line ${t.line}, source ${esc(t.source)}">${t.token}</span>`).join('')||'<em>The log is empty.</em>';
   $('alerts').innerHTML=r.alerts.length?r.alerts.map(a=>`<div class="alert ${a.severity.toLowerCase()}"><b>Pattern Detected: ${esc(a.rule)}</b><br>Severity: ${a.severity}. Events in match: ${a.events}.${a.window?` Within ${a.window} s.`:''} Lines ${a.lines}. Source: ${esc(a.source)}.</div>`).join(''):'<p>No suspicious patterns found.</p>';
+  if(save)loadHistory();
 }
 function upload(){const f=$('file').files[0];if(f)f.text().then(t=>{$('log').value=t;analyze()})}
 async function draw(id,kind){$('diagram').innerHTML='<p><b>Rule '+id+' — '+{nfa:'NFA (ε = free move)',dfa:'DFA',min:'Minimized DFA'}[kind]+'</b> (dead state omitted)</p>'+await (await fetch(`/diagram/${id}/${kind}`)).text()}
@@ -81,6 +90,16 @@ async function show(id){
   $('table').textContent='Minimized DFA for: '+a.pattern+'\n(moves into the dead state are omitted)\n\n'+a.table.map(s=>
     `q${s.state}${s.start?' [start]':''}${s.accepting?' [accepting]':''}\n`+Object.entries(s.moves).map(([k,v])=>`   ${k} -> q${v}`).join('\n')).join('\n');
 }
+async function loadHistory(){
+  const h=await j('/history');
+  $('top').innerHTML=h.top_rules.length?'<b>Most frequent rules:</b> '+h.top_rules.map(r=>`${esc(r.rule)} (${r.n})`).join(', '):'No saved analyses yet. Each time you press Analyze, the run is saved here.';
+  $('runs').innerHTML=h.runs.map(r=>`<tr><td>#${r.id}</td><td>${r.created}</td><td>${r.events}</td><td>${r.alert_count}</td><td><button onclick="viewRun(${r.id})">View</button></td></tr>`).join('');
+}
+async function viewRun(id){
+  const a=await j('/history/'+id);
+  $('runalerts').innerHTML=`<p><b>Run #${id}</b></p>`+(a.length?a.map(x=>`<div class="alert ${x.severity.toLowerCase()}"><b>${esc(x.rule)}</b> (${x.severity}). Events in match: ${x.events}. Lines ${x.lines}. Source: ${esc(x.source)}.</div>`).join(''):'<p>No alerts in this run.</p>');
+}
+async function clearHistory(){await fetch('/history',{method:'DELETE'});$('runalerts').innerHTML='';loadHistory()}
 async function loadRules(){
   const rs=await j('/rules');
   $('rules').innerHTML=rs.map(r=>`<tr><td>${r.id}</td><td><code>${esc(r.pattern)}</code>${r.window?` <small>within ${r.window} s</small>`:''}</td><td>${esc(r.name)}</td><td>${r.severity}</td><td>${r.nfa_states}, ${r.dfa_states}, ${r.min_states}</td><td><button onclick="draw(${r.id},'nfa')">NFA</button> <button onclick="draw(${r.id},'dfa')">DFA</button> <button onclick="draw(${r.id},'min')">Min</button> <button onclick="show(${r.id})">Table</button>${r.custom?` <button onclick="removeRule(${r.id})">Remove</button>`:''}</td></tr>`).join('');
@@ -92,12 +111,12 @@ async function addRule(){
   if(!res.ok){$('msg').textContent=d.error;return}
   $('pat').value='';$('rname').value='';$('rwin').value='';
   await loadRules();draw(d.id,'min');
-  if($('log').value.trim())analyze();
+  if($('log').value.trim())analyze(false);
 }
-async function removeRule(id){await fetch('/rules/'+id,{method:'DELETE'});$('diagram').innerHTML='';await loadRules();if($('log').value.trim())analyze()}
+async function removeRule(id){await fetch('/rules/'+id,{method:'DELETE'});$('diagram').innerHTML='';await loadRules();if($('log').value.trim())analyze(false)}
 (async()=>{
   samples=await j('/samples');
   $('sample').innerHTML+=Object.keys(samples).map(k=>`<option>${k}</option>`).join('');
-  loadRules();
+  loadRules();loadHistory();
 })();
 </script></body></html>
